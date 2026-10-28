@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 — 2026-10-27
+- Synthesized music loop, avalanche rumble and sound effects; M cycles music/effects/mute.
+- Random creature attacks with edge warnings: penguin, polar bear, yeti (snowballs), narwhal.
+- Combo multiplier (×1–×8, 3 s window) across spins, grabs, big air, gates, clears, creature hops and close calls.
+- Local top-10 high-score table with name entry; H shows it from the title.
+- Snapshot dev mode runs silently against a throwaway leaderboard and can force creatures.
+
 ## 0.1.0 — 2026-10-27
 - First playable: steering, tuck/brake, jumps and ramp spins, moguls, gates, trees/rocks,
   chasing avalanche with gap meter, procedural course, best score, pause on focus loss.

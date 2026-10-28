@@ -1,8 +1,9 @@
 # Avalanche Run
 
 An original downhill skiing arcade game for macOS, built with SpriteKit. The
-avalanche is coming: ski as far as you can, dodge trees and rocks, hit ramps
-for spins and thread gates for speed.
+avalanche is coming: ski as far as you can, dodge trees, rocks and the locals,
+hit ramps for spins and grabs, chain tricks into combos, and sign the
+high-score board.
 
 ## Play
 
@@ -20,17 +21,51 @@ ad-hoc signs it.
 | ← → (A D) | Steer; in the air, spin |
 | ↓ (S) | Tuck (faster) |
 | ↑ (W) | Brake |
+| ↓ in the air | Grab (ramp air only) |
 | Space | Jump / start |
 | P or Esc | Pause |
+| M | Cycle sound: music + effects → effects only → muted |
+| H | High scores (title screen) |
 | Return or R | Ski again after you're buried |
 
 ## Scoring
 
 - 1 point per meter skied.
-- Blue gates: +100 and a speed boost when you pass between the flags.
-- Spins off a ramp: +250 per full turn, +100 per consecutive clean landing.
-  Land crooked and you wipe out.
-- Trees and rocks stop you dead for about a second, and the avalanche closes in.
-  The gap meter at the top shows how close it is.
+- Tricks score at your current **combo multiplier** (×1 up to ×8). Each trick
+  adds one to the chain; you have 3 seconds on the ground to land the next one
+  (the clock pauses in the air). Crashing loses the combo.
 
-Best score is kept in `UserDefaults` (`net.cgallagher.avalancherun`).
+| Trick | Base points |
+|---|---|
+| Spin off a ramp or jump | 250 per full turn (land within ~45° of straight or you wipe out) |
+| Grab (hold ↓ for ¼ s on ramp air) | 100 |
+| Big air (a second or more aloft) | 100 |
+| Gate (pass between the blue flags, also a speed boost) | 100 |
+| Clear (jump over a tree or rock) | 50 |
+| Hop a creature | 250 |
+| Close call (just miss a creature) | 150 |
+| Dodge a snowball mid-air | 100 |
+
+## The locals
+
+After 200 m, one creature at a time turns up at random, more often the further
+down you get. A red **!** badge at the screen edge says who's coming.
+
+- **Penguin**: belly-slides across the run ahead of you.
+- **Polar bear**: charges uphill, homing for a moment before it commits.
+- **Yeti**: a horned fuzzball that runs along the edge and lobs three snowballs at where you're headed.
+- **Narwhal**: a ripple appears in the snow ahead, and it breaches as you arrive.
+
+Getting hit stops you like a tree does. Jumping over one scores big.
+
+## High scores
+
+Finish in the top 10 and you're asked for a name (up to 12 characters,
+Return to save). The table is stored locally in `UserDefaults`
+(`net.cgallagher.avalancherun`).
+
+## Audio
+
+All music and sound effects are synthesized in code at launch
+(`Audio.swift`); the app ships no audio files. The music is a 16-bar loop in A
+minor, and a low rumble swells as the avalanche closes in.

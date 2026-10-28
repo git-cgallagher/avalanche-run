@@ -8,6 +8,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = makeMenu()
+        let snapshotDir = ProcessInfo.processInfo.environment["AVALANCHE_SNAPSHOT_DIR"]
+        if snapshotDir != nil {
+            let suite = "net.cgallagher.avalancherun.snapshot"
+            UserDefaults().removePersistentDomain(forName: suite)
+            Leaderboard.store = UserDefaults(suiteName: suite) ?? .standard
+        }
+        _ = Sound.shared  // synthesize audio before the first frame
+        if snapshotDir != nil { Sound.shared.silenceOutput() }
 
         let size = CGSize(width: 1024, height: 768)
         window = NSWindow(
@@ -33,17 +41,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeFirstResponder(skView)
         NSApp.activate()
 
-        if let dir = ProcessInfo.processInfo.environment["AVALANCHE_SNAPSHOT_DIR"] {
-            runSnapshotScript(into: URL(fileURLWithPath: dir))
+        if let snapshotDir {
+            print("audio engine running: \(Sound.shared.isRunning)")
+            runSnapshotScript(into: URL(fileURLWithPath: snapshotDir))
         }
     }
 
-    /// Dev aid: starts a run, holds tuck and weaves, and snapshots along the way.
+    /// Dev aid: starts a run, holds tuck, weaves and jumps, then types a high-score name,
+    /// snapshotting along the way. Run with AVALANCHE_DEBUG_CREATURES=1 to meet every creature early.
     private func runSnapshotScript(into dir: URL) {
-        func key(_ code: UInt16, down: Bool) {
+        func key(_ code: UInt16, _ chars: String = "", down: Bool = true) {
             guard let scene = skView.scene, let event = NSEvent.keyEvent(
                 with: down ? .keyDown : .keyUp, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+                windowNumber: window.windowNumber, context: nil, characters: chars, charactersIgnoringModifiers: chars,
                 isARepeat: false, keyCode: code) else { return }
             down ? scene.keyDown(with: event) : scene.keyUp(with: event)
         }
@@ -52,16 +62,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         func shot(_ name: String) { (skView.scene as? GameScene)?.snapshot(to: dir.appendingPathComponent("\(name).png")) }
 
-        at(1.5) { shot("1-title") }
-        at(2.0) { key(49, down: true); key(49, down: false); key(125, down: true) }
-        at(3.5) { key(124, down: true) }
-        at(3.8) { key(124, down: false) }
-        at(4.5) { shot("2-running") }
-        at(5.0) { key(123, down: true) }
-        at(5.6) { key(123, down: false) }
-        at(7.0) { shot("3-later") }
-        at(10.0) { shot("4-later") }
-        at(16.0) { shot("5-end") }
+        at(1.5) { shot("00-title") }
+        at(2.0) { key(49); key(49, down: false); key(125) }
+        for i in 1...26 {
+            let t = 2.0 + Double(i) * 0.7
+            at(t) { shot(String(format: "%02d-run", i)) }
+            // Weave and hop so there's something to see.
+            if i % 3 == 0 { at(t + 0.1) { key(i % 2 == 0 ? 123 : 124) } }
+            if i % 3 == 0 { at(t + 0.4) { key(i % 2 == 0 ? 123 : 124, down: false) } }
+            if i % 4 == 0 { at(t + 0.2) { key(49); key(49, down: false) } }
+        }
+        // Once buried, wait for the name prompt, sign the board, and quit.
+        func waitForNaming(_ tries: Int) {
+            guard let scene = skView.scene as? GameScene, tries < 200 else { NSApp.terminate(nil); return }
+            guard scene.state == .naming else { at(0.25) { waitForNaming(tries + 1) }; return }
+            for ch in "CLAUDE" { key(0, String(ch)) }
+            at(0.3) { shot("90-name") }
+            at(0.6) { key(36) }
+            at(1.0) { shot("91-board") }
+            at(1.4) { NSApp.terminate(nil) }
+        }
+        at(20.5) { key(125, down: false) }  // stop tucking so the avalanche catches up
+        at(21.0) { key(126) }
+        at(21.0) { waitForNaming(0) }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

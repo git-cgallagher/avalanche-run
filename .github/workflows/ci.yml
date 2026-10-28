@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Toolchain
+        run: swift --version
+      - name: Build universal app
+        run: ./build-app.sh
+      - name: Package DMG
+        run: ./make-dmg.sh
+      - name: Check bundle
+        run: |
+          set -euo pipefail
+          BIN="build/Avalanche Run.app/Contents/MacOS/AvalancheRun"
+          lipo -archs "$BIN" | grep -q arm64
+          lipo -archs "$BIN" | grep -q x86_64
+          hdiutil verify build/AvalancheRun-*.dmg

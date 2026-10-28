@@ -1,0 +1,35 @@
+# Push a tag like v0.3.0 (matching CFBundleShortVersionString in Info.plist) to publish a GitHub
+# release with the drag-to-Applications DMG attached.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write  # create the release and upload the DMG
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check tag matches Info.plist
+        run: |
+          set -euo pipefail
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)
+          [[ "$GITHUB_REF_NAME" == "v$VERSION" ]] || { echo "Tag $GITHUB_REF_NAME != v$VERSION in Info.plist"; exit 1; }
+      - name: Build universal app and DMG
+        run: ./make-dmg.sh
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Notes are this version's CHANGELOG section.
+          awk -v v="$VERSION" '/^## /{p = index($0, "## " v " ") == 1} p' CHANGELOG.md | tail -n +2 > notes.md
+          gh release create "$GITHUB_REF_NAME" "build/AvalancheRun-$VERSION.dmg" \
+            --title "Avalanche Run $VERSION" --notes-file notes.md

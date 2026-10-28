@@ -5,16 +5,38 @@ avalanche is coming: ski as far as you can, dodge trees, rocks and the locals,
 hit ramps for spins and grabs, chain tricks into combos, and sign the
 high-score board.
 
-## Play
+## Install
+
+Requires macOS 14 (Sonoma) or later, on Apple silicon or Intel.
+
+1. Download `AvalancheRun-<version>.dmg` from the
+   [latest release](https://github.com/git-cgallagher/avalanche-run/releases/latest).
+2. Open it and drag **Avalanche Run** onto the **Applications** folder.
+3. Eject the disk image and launch Avalanche Run from Applications or Launchpad.
+
+**First launch:** the app is signed but not notarized by Apple (that needs a paid
+Apple Developer account), so macOS blocks the first launch with a warning that it
+can't verify the app. To allow it:
+
+- Open the app once and dismiss the warning. Then go to **System Settings ▸ Privacy & Security**,
+  scroll to the message about Avalanche Run, and click **Open Anyway**.
+- Or, from Terminal:
+
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/Avalanche Run.app"
+  ```
+
+You only need to do this once per version.
+
+## Build from source
+
+Only the Xcode Command Line Tools are needed (Swift 5.9+); full Xcode isn't required.
 
 ```bash
-./build-app.sh
+./build-app.sh                  # universal build/Avalanche Run.app (arm64 + x86_64), ad-hoc signed
 open "build/Avalanche Run.app"
+./make-dmg.sh                   # build/AvalancheRun-<version>.dmg with an Applications shortcut
 ```
-
-Only the Xcode Command Line Tools are needed (Swift 5.9+, macOS 14+). The
-build script compiles the Swift package, wraps it in an `.app` bundle and
-ad-hoc signs it.
 
 | Key | Action |
 |---|---|

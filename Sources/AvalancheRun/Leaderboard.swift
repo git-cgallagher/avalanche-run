@@ -5,13 +5,14 @@ struct ScoreEntry: Codable, Equatable {
     var score: Int
     var meters: Int
     var date: Date
+    /// Slowest game-speed multiplier used during the run (nil for runs before speeds existed).
+    var speed: Double?
 }
 
 /// Local top-10 table, stored as JSON in UserDefaults.
 enum Leaderboard {
     static let size = 10
-    /// Swapped for a throwaway suite during snapshot runs so tests never touch real scores.
-    static var store = UserDefaults.standard
+    private static var store: UserDefaults { Store.defaults }
 
     static var entries: [ScoreEntry] {
         guard let data = store.data(forKey: "leaderboard"),

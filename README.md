@@ -25,6 +25,8 @@ ad-hoc signs it.
 | Space | Jump / start |
 | P or Esc | Pause |
 | M | Cycle sound: music + effects → effects only → muted |
+| G | Cycle game speed (title or pause screen) |
+| ⌘1 – ⌘4 | Game ▸ Speed menu: Chill, Normal, Fast, Turbo |
 | H | High scores (title screen) |
 | Return or R | Ski again after you're buried |
 
@@ -46,6 +48,22 @@ ad-hoc signs it.
 | Close call (just miss a creature) | 150 |
 | Dodge a snowball mid-air | 100 |
 
+## Prize boxes
+
+Purple gift boxes turn up every 120–220 m. Ski (or jump) through one and the
+avalanche either **freezes for 4 seconds** (more time) or gets **shoved back
+50 m** (more distance). The gap meter turns ice-blue and counts down while it's
+frozen. If the avalanche is already far behind, you always get the freeze, so
+the prize is never wasted. Each box is also a 50-point trick for your combo.
+
+## Game speed
+
+Four speeds scale the whole simulation clock (skier, avalanche, creatures and
+timers together): **Chill 0.75×, Normal 1×, Fast 1.25×, Turbo 1.5×**. Change it
+with G on the title or pause screen, or from the Game menu (⌘1–⌘4). It's
+remembered between launches. A HUD tag shows any speed other than Normal.
+Physics substeps at 60 Hz or finer, so Turbo can't skip through trees.
+
 ## The locals
 
 After 200 m, one creature at a time turns up at random, more often the further
@@ -61,7 +79,9 @@ Getting hit stops you like a tree does. Jumping over one scores big.
 ## High scores
 
 Finish in the top 10 and you're asked for a name (up to 12 characters,
-Return to save). The table is stored locally in `UserDefaults`
+Return to save). Runs that weren't at Normal speed are tagged with the
+**slowest** speed used during the run, so you can't run Chill and switch to Turbo
+in the pause menu to get a Turbo tag. The table is stored locally in `UserDefaults`
 (`net.cgallagher.avalancherun`).
 
 ## Audio

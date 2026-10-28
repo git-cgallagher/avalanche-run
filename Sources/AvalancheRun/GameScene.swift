@@ -13,6 +13,7 @@ enum Key {
     static let sound: UInt16 = 46               // M
     static let scores: UInt16 = 4               // H
     static let delete: UInt16 = 51              // Backspace
+    static let speed: UInt16 = 5                // G
 }
 
 /// Gameplay tuning. Distances are scene points; 10 points = 1 meter.
@@ -37,13 +38,16 @@ enum Tune {
     static let maxGap: CGFloat = 1200         // avalanche never falls further behind than this
     static let rowSpacing: CGFloat = 80
     static let creaturesFrom = 200            // meters before the locals start showing up
+    static let prizeSpacing: ClosedRange<CGFloat> = 1200...2200  // points between prize boxes (120–220 m)
+    static let prizePush: CGFloat = 500       // a distance prize shoves the avalanche back 50 m
+    static let prizeFreeze: CGFloat = 4       // a time prize stops the avalanche for this many seconds
 }
 
 final class GameScene: SKScene {
     enum State { case title, scores, playing, paused, buried, naming, over }
 
     final class Obstacle {
-        enum Kind { case tree, rock, mogul, ramp, gate, decor }
+        enum Kind { case tree, rock, mogul, ramp, gate, prize, decor }
         let kind: Kind
         let node: SKNode
         let radius: CGFloat
@@ -60,6 +64,8 @@ final class GameScene: SKScene {
     var autostart = false
     /// Dev aid: creatures from the first second, cycling through every kind.
     let debugCreatures = ProcessInfo.processInfo.environment["AVALANCHE_DEBUG_CREATURES"] != nil
+    /// Dev aid: a prize box dropped straight ahead of the skier every 2 s.
+    private let debugPrizes = ProcessInfo.processInfo.environment["AVALANCHE_DEBUG_PRIZES"] != nil
 
     var state = State.title
     let world = SKNode()
@@ -76,6 +82,8 @@ final class GameScene: SKScene {
     private let comboLabel = GameScene.label("", size: 20)
     private let comboBar = SKSpriteNode(color: Palette.gate, size: CGSize(width: 120, height: 5))
     private let meterFill = SKSpriteNode(color: Palette.gate, size: CGSize(width: 236, height: 8))
+    private let meterTitle = GameScene.label("AVALANCHE GAP", size: 13)
+    private let speedTag = GameScene.label("", size: 15)
     private var nameLabel: SKLabelNode?
     private var textures: [String: (SKTexture, CGPoint)] = [:]
     private static let trackFade = SKAction.sequence([.wait(forDuration: 1.5), .fadeOut(withDuration: 1.0), .removeFromParent()])
@@ -101,6 +109,10 @@ final class GameScene: SKScene {
     private var overTimer: CGFloat = 0
     private var popupSlot = 0
     private var playerName = ""
+    private var nextPrizeY: CGFloat = -900
+    private var frozenTime: CGFloat = 0
+    private var debugPrizeTimer: CGFloat = 2
+    private var slowestSpeed = 1.0  // the leaderboard records the slowest speed used in a run
 
     var creatures: [Creature] = []
     var snowballs: [Snowball] = []
@@ -145,7 +157,7 @@ final class GameScene: SKScene {
             "poleL": Art.gatePole(flagRight: true), "poleR": Art.gatePole(flagRight: false),
             "post": Art.post(), "dimple": Art.dimple(),
             "penguin": Art.penguin(), "bear": Art.polarBear(), "yeti": Art.yeti(), "narwhal": Art.narwhal(),
-            "snowball": Art.snowball(),
+            "snowball": Art.snowball(), "prize": Art.prizeBox(),
         ]
         for (name, node) in art {
             let frame = node.calculateAccumulatedFrame()
@@ -229,9 +241,12 @@ final class GameScene: SKScene {
         meterFill.anchorPoint = CGPoint(x: 0, y: 0.5)
         meterFill.position = CGPoint(x: -118, y: 0)
         meterBack.addChild(meterFill)
-        let meterTitle = GameScene.label("AVALANCHE GAP", size: 13)
         meterTitle.fontColor = Palette.ink.withAlphaComponent(0.6)
         meterTitle.position = CGPoint(x: 0, y: 330)
+
+        speedTag.horizontalAlignmentMode = .left
+        speedTag.position = CGPoint(x: -490, y: 322)
+        speedTag.fontColor = Palette.amber
 
         comboLabel.fontColor = Palette.gate
         comboLabel.horizontalAlignmentMode = .right
@@ -239,7 +254,7 @@ final class GameScene: SKScene {
         comboBar.anchorPoint = CGPoint(x: 1, y: 0.5)
         comboBar.position = CGPoint(x: 490, y: 277)
 
-        for node in [distanceLabel, scoreLabel, bestLabel, meterBack, meterTitle, comboLabel, comboBar] as [SKNode] {
+        for node in [distanceLabel, scoreLabel, bestLabel, meterBack, meterTitle, speedTag, comboLabel, comboBar] as [SKNode] {
             node.zPosition = 100
             cam.addChild(node)
         }
@@ -318,6 +333,12 @@ final class GameScene: SKScene {
                 place("dimple", .decor, at: CGPoint(x: .random(in: -w...w), y: y + .random(in: -40...40)))
             }
 
+            if y < nextPrizeY {
+                placePrize(at: CGPoint(x: CGFloat.random(in: (-w + 80)...(w - 80)), y: y))
+                nextPrizeY -= CGFloat.random(in: Tune.prizeSpacing)
+                continue
+            }
+
             guard y < -450 else { continue }  // keep the start area clear
             let density = min(1.4 + -y / 9000, 5.0)
             var count = Int(density)
@@ -333,6 +354,11 @@ final class GameScene: SKScene {
                 }
             }
         }
+    }
+
+    private func placePrize(at p: CGPoint) {
+        let prize = place("prize", .prize, at: p, radius: 22)
+        prize.node.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.45), .scale(to: 1, duration: 0.45)])))
     }
 
     private func cleanup() {
@@ -356,6 +382,11 @@ final class GameScene: SKScene {
         guard !event.isARepeat else { return }
         if code == Key.sound {
             cycleSound()
+            return
+        }
+        if code == Key.speed && (state == .title || state == .scores || state == .paused) {
+            Settings.cycleSpeed()
+            speedChanged()
             return
         }
         switch state {
@@ -395,9 +426,18 @@ final class GameScene: SKScene {
         Sound.shared.play(.blip)
     }
 
+    /// Called after the speed setting changes, from the G key or the Game menu.
+    func speedChanged() {
+        popup("Speed: \(Settings.speed.label)", color: Palette.ink)
+        Sound.shared.play(.blip)
+        if state == .title { showTitle() }
+        if state == .paused { showPause() }
+    }
+
     // MARK: - Game flow
 
     private func start() {
+        slowestSpeed = Settings.speed.multiplier
         state = .playing
         overlay.isHidden = true
     }
@@ -405,7 +445,7 @@ final class GameScene: SKScene {
     private func setPaused(_ paused: Bool) {
         if paused {
             state = .paused
-            showPanel(title: "PAUSED", lines: ["Press P to keep skiing"])
+            showPause()
         } else {
             state = .playing
             overlay.isHidden = true
@@ -441,7 +481,7 @@ final class GameScene: SKScene {
             Sound.shared.play(.highScore)
         } else {
             state = .over
-            showLeaderboard(title: "BURIED!", subtitle: "\(meters.formatted()) m  ·  score \(score.formatted())",
+            showLeaderboard(title: "BURIED!", subtitle: "\(meters.formatted()) m  ·  score \(score.formatted())\(speedNote)",
                             highlight: nil, footer: "Press Return to ski again")
         }
     }
@@ -469,7 +509,7 @@ final class GameScene: SKScene {
         var name = playerName.trimmingCharacters(in: .whitespaces)
         if name.isEmpty { name = "SKIER" }
         Leaderboard.lastName = name
-        let rank = Leaderboard.record(ScoreEntry(name: name, score: score, meters: meters, date: Date()))
+        let rank = Leaderboard.record(ScoreEntry(name: name, score: score, meters: meters, date: Date(), speed: slowestSpeed))
         state = .over
         Sound.shared.play(.trick)
         showLeaderboard(title: "HIGH SCORES", subtitle: "\(name) takes #\(rank + 1)",
@@ -487,7 +527,17 @@ final class GameScene: SKScene {
             "Watch out for the locals. Jump them for big points.",
             "",
             "Space  start     H  high scores     M  sound",
+            "G  game speed: \(Settings.speed.label)",
         ])
+    }
+
+    private func showPause() {
+        showPanel(title: "PAUSED", lines: ["Press P to keep skiing", "G  game speed: \(Settings.speed.label)"])
+    }
+
+    /// " · Turbo" when the run wasn't at normal speed.
+    private var speedNote: String {
+        slowestSpeed == 1 ? "" : "  ·  \(Settings.name(forMultiplier: slowestSpeed))"
     }
 
     private func showScores() {
@@ -499,7 +549,7 @@ final class GameScene: SKScene {
         let rank = Leaderboard.rank(for: score)
         presentPanel { y, content in
             addLine("NEW HIGH SCORE!", size: 44, to: content, y: &y)
-            addLine("#\(rank + 1)  ·  \(score.formatted()) points  ·  \(meters.formatted()) m", size: 19, bold: false, to: content, y: &y)
+            addLine("#\(rank + 1)  ·  \(score.formatted()) points  ·  \(meters.formatted()) m\(speedNote)", size: 19, bold: false, to: content, y: &y)
             y -= 8
             nameLabel = addLine(playerName + "_", size: 34, font: "Menlo-Bold", color: Palette.gate, to: content, y: &y)
             y -= 8
@@ -529,6 +579,7 @@ final class GameScene: SKScene {
                 let color = i == highlight ? Palette.gate : Palette.ink
                 let columns: [(String, CGFloat, SKLabelHorizontalAlignmentMode)] = [
                     ("\(i + 1).", -200, .right), (entry.name, -185, .left),
+                    (entry.speed.map { $0 == 1 ? "" : Settings.name(forMultiplier: $0) } ?? "", 40, .right),
                     ("\(entry.meters.formatted()) m", 130, .right), (entry.score.formatted(), 260, .right),
                 ]
                 for (text, x, alignment) in columns {
@@ -580,9 +631,15 @@ final class GameScene: SKScene {
     override func update(_ currentTime: TimeInterval) {
         let dt = lastTime == 0 ? 1.0 / 60 : CGFloat(min(currentTime - lastTime, 1.0 / 30))
         lastTime = currentTime
+        let rate = CGFloat(Settings.speed.multiplier)
+        speed = rate  // SKAction animations follow the game speed too
+        let simDt = dt * rate
         switch state {
-        case .playing: step(dt)
-        case .buried: stepBuried(dt)
+        case .playing:
+            // Substep at 60 Hz or finer so fast speeds can't tunnel through trees.
+            let steps = max(1, Int((simDt * 60 - 0.01).rounded(.up)))
+            for _ in 0..<steps where state == .playing { step(simDt / CGFloat(steps)) }
+        case .buried: stepBuried(simDt)
         default: Sound.shared.setRumble(0)
         }
         updateCamera(dt: dt)
@@ -591,6 +648,7 @@ final class GameScene: SKScene {
 
     private func step(_ dt: CGFloat) {
         let prevY = pos.y
+        slowestSpeed = min(slowestSpeed, Settings.speed.multiplier)
 
         if stun > 0 {
             stun -= dt
@@ -633,16 +691,26 @@ final class GameScene: SKScene {
             if comboTimer <= 0 { comboChain = 0 }
         }
 
+        if debugPrizes {
+            debugPrizeTimer -= dt
+            if debugPrizeTimer <= 0 {
+                debugPrizeTimer = 2
+                placePrize(at: CGPoint(x: pos.x + sin(heading) * 300, y: pos.y - cos(heading) * 300))
+            }
+        }
         collide(prevY: prevY)
         updateCreatures(dt)
         layTracks(dt)
         updateSkierVisuals()
 
-        let avalancheSpeed = min(320 + -pos.y * 0.014, 860)
+        if frozenTime > 0 { frozenTime = max(0, frozenTime - dt) }
+        let avalancheSpeed: CGFloat = frozenTime > 0 ? 0 : min(320 + -pos.y * 0.014, 860)
         avY = min(avY - avalancheSpeed * dt, pos.y + Tune.maxGap)
+        avalanche.alpha = frozenTime > 0 ? 0.75 : 1
         let gap = avY - pos.y
-        if gap < 420 { shake = max(shake, (420 - gap) / 420 * 6) }
-        Sound.shared.setRumble(Float(max(0, min(1, (800 - gap) / 800))))
+        if gap < 420 && frozenTime <= 0 { shake = max(shake, (420 - gap) / 420 * 6) }
+        let rumble = Float(max(0, min(1, (800 - gap) / 800)))
+        Sound.shared.setRumble(frozenTime > 0 ? rumble * 0.25 : rumble)
         if gap <= 6 { bury() }
 
         spawnRows()
@@ -691,10 +759,49 @@ final class GameScene: SKScene {
                     vel = min(Tune.maxSpeed, vel + 110)
                     award("Gate", 100, sound: .gate)
                 }
+            case .prize:
+                guard hypot(dx, dy) < obstacle.radius + 12 else { continue }
+                obstacle.used = true
+                obstacle.node.removeAllActions()
+                obstacle.node.run(.sequence([.group([.scale(to: 1.8, duration: 0.25), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
+                collectPrize(at: p)
             case .decor:
                 break
             }
         }
+    }
+
+    /// Prize boxes buy time (freeze the avalanche) or distance (shove it back).
+    /// A distance prize would be wasted when the avalanche is already far back, so that rolls time instead.
+    private func collectPrize(at p: CGPoint) {
+        let gap = avY - pos.y
+        if gap > Tune.maxGap - Tune.prizePush / 2 || Bool.random() {
+            frozenTime += Tune.prizeFreeze
+            popup("Avalanche frozen +\(Int(Tune.prizeFreeze))s", color: Palette.frozen)
+        } else {
+            avY = min(avY + Tune.prizePush, pos.y + Tune.maxGap)
+            popup("Avalanche pushed back +\(Int(Tune.prizePush / Tune.pointsPerMeter)) m", color: Palette.frozen)
+        }
+        award("Prize", 50, sound: nil)
+        Sound.shared.play(.prize)
+
+        let sparkle = SKEmitterNode()
+        sparkle.particleTexture = Art.dotTexture(radius: 5)
+        sparkle.numParticlesToEmit = 40
+        sparkle.particleBirthRate = 400
+        sparkle.particleLifetime = 0.7
+        sparkle.emissionAngleRange = 2 * .pi
+        sparkle.particleSpeed = 180
+        sparkle.particleSpeedRange = 90
+        sparkle.particleScale = 0.5
+        sparkle.particleScaleRange = 0.3
+        sparkle.particleAlphaSpeed = -1.4
+        sparkle.particleColor = Palette.ribbon
+        sparkle.particleColorBlendFactor = 1
+        sparkle.position = p
+        sparkle.zPosition = 57
+        world.addChild(sparkle)
+        sparkle.run(.sequence([.wait(forDuration: 1.0), .removeFromParent()]))
     }
 
     private func jump() {
@@ -817,7 +924,15 @@ final class GameScene: SKScene {
         bestLabel.text = "best \(max(Leaderboard.best, score).formatted())"
         let fraction = max(0, min(1, (avY - pos.y) / Tune.maxGap))
         meterFill.xScale = max(0.02, fraction)
-        meterFill.color = fraction < 0.3 ? Palette.danger : fraction < 0.6 ? Palette.amber : Palette.gate
+        if frozenTime > 0 {
+            meterFill.color = Palette.frozen
+            meterTitle.text = "FROZEN \(String(format: "%.1f", frozenTime))s"
+        } else {
+            meterFill.color = fraction < 0.3 ? Palette.danger : fraction < 0.6 ? Palette.amber : Palette.gate
+            meterTitle.text = "AVALANCHE GAP"
+        }
+        speedTag.isHidden = Settings.speed.multiplier == 1
+        speedTag.text = "\(Settings.speed.name.uppercased()) \(Settings.speed.multiplier.formatted())×"
 
         let showCombo = comboChain > 0 && (state == .playing || state == .paused)
         comboLabel.isHidden = !showCombo

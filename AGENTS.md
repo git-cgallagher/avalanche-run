@@ -9,6 +9,7 @@ Original macOS arcade game (Swift Package + SpriteKit, no Xcode project, no asse
 - `Sources/AvalancheRun/Creatures.swift`: the four creatures and snowballs, as a `GameScene` extension.
 - `Sources/AvalancheRun/Audio.swift`: `Sound` (AVAudioEngine playback) + `Synth` (offline synth for every effect and the music loop).
 - `Sources/AvalancheRun/Leaderboard.swift`: top-10 table in UserDefaults.
+- `Sources/AvalancheRun/Settings.swift`: `Store.defaults` (where settings and scores persist) + game-speed presets.
 - `build-app.sh` → `build/Avalanche Run.app` (gitignored).
 
 ## Verifying visually
@@ -18,7 +19,9 @@ AVALANCHE_SNAPSHOT_DIR=/some/dir "build/Avalanche Run.app/Contents/MacOS/Avalanc
 ```
 It plays silently with a throwaway leaderboard suite, so real scores are untouched. It holds tuck, weaves and jumps, snapshots every 0.7 s,
 then brakes until buried, types `CLAUDE` at the name prompt and quits by itself (`90-name.png`, `91-board.png`).
-Add `AVALANCHE_DEBUG_CREATURES=1` to spawn creatures from the start, cycling yeti → penguin → bear → narwhal.
+The script presses G twice first, so it runs at Turbo.
+Add `AVALANCHE_DEBUG_CREATURES=1` to spawn creatures from the start, cycling yeti → penguin → bear → narwhal,
+and `AVALANCHE_DEBUG_PRIZES=1` to drop a prize box 300 pt ahead of the skier every 2 s (the bot weaves too much to find normal ones).
 
 ## Gotchas
 - Swift 6.2 toolchain: top-level code in `main.swift` must be wrapped in `MainActor.assumeIsolated`.

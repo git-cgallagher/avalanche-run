@@ -8,7 +8,7 @@ final class Sound {
     enum Effect: CaseIterable {
         case jump, land, trick, crash, gate, comboUp, comboLost, clear, warn, toss, splat
         case yeti, penguin, bear, narwhal
-        case buried, blip, highScore
+        case prize, buried, blip, highScore
     }
 
     /// M cycles through these.
@@ -216,6 +216,10 @@ enum Synth {
         case .narwhal:
             return mix(noise(0.7, volume: 0.35, smooth: 0.3, curve: 3, seed: 5),
                        concat(silence(0.05), tone(.sine, 0.3, from: 300, to: 700, volume: 0.3, curve: 1.5)))
+        case .prize:
+            let notes = [76, 81, 84, 88, 93].map { tone(.triangle, 0.07, from: note($0), to: note($0), volume: 0.26, curve: 0.6) }
+            return mix(concat(notes[0], notes[1], notes[2], notes[3], notes[4]),
+                       concat(silence(0.2), tone(.sine, 0.45, from: note(100), to: note(100), volume: 0.1, curve: 3)))
         case .buried:
             return concat(tone(.square, 0.18, from: 523, to: 523, volume: 0.15, curve: 0.6),
                           tone(.square, 0.18, from: 392, to: 392, volume: 0.15, curve: 0.6),

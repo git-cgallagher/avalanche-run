@@ -37,6 +37,11 @@ enum Palette {
     static let narwhalDark = SKColor(red: 0.28, green: 0.38, blue: 0.46, alpha: 1)
     static let narwhalBelly = SKColor(red: 0.78, green: 0.85, blue: 0.88, alpha: 1)
     static let tusk = SKColor(red: 0.96, green: 0.93, blue: 0.82, alpha: 1)
+    // Prize boxes and the frozen avalanche
+    static let prize = SKColor(red: 0.62, green: 0.30, blue: 0.86, alpha: 1)
+    static let prizeDark = SKColor(red: 0.42, green: 0.16, blue: 0.62, alpha: 1)
+    static let ribbon = SKColor(red: 1.00, green: 0.84, blue: 0.25, alpha: 1)
+    static let frozen = SKColor(red: 0.35, green: 0.78, blue: 0.95, alpha: 1)
 }
 
 /// Vector art for every sprite. Obstacles are baked to textures once per scene;
@@ -259,6 +264,24 @@ enum Art {
             node.addChild(ellipse(s, s * 0.8, fill: Palette.narwhalDark, at: CGPoint(x: x, y: y)))
         }
         node.addChild(ellipse(3, 3, fill: Palette.ink, at: CGPoint(x: 17, y: 3)))
+        return node
+    }
+
+    /// Wrapped prize box with a bow, seen from above.
+    static func prizeBox() -> SKNode {
+        let node = SKNode()
+        node.addChild(ellipse(40, 14, fill: Palette.shade, at: CGPoint(x: 5, y: -15)))
+        let box = CGPath(roundedRect: CGRect(x: -15, y: -15, width: 30, height: 30), cornerWidth: 4, cornerHeight: 4, transform: nil)
+        node.addChild(shape(box, fill: Palette.prize, stroke: Palette.prizeDark, width: 2))
+        for size in [CGSize(width: 7, height: 30), CGSize(width: 30, height: 7)] {
+            node.addChild(SKSpriteNode(color: Palette.ribbon, size: size))
+        }
+        for dir: CGFloat in [-1, 1] {
+            let loop = ellipse(13, 9, fill: Palette.ribbon, stroke: Palette.helmetDark, width: 1, at: CGPoint(x: dir * 7, y: 3))
+            loop.zRotation = dir * 0.5
+            node.addChild(loop)
+        }
+        node.addChild(ellipse(6, 6, fill: Palette.helmetDark, at: CGPoint(x: 0, y: 1)))
         return node
     }
 

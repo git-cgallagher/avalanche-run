@@ -2,7 +2,7 @@ import AppKit
 import SpriteKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var window: NSWindow!
     private var skView: SKView!
 
@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if snapshotDir != nil {
             let suite = "net.cgallagher.avalancherun.snapshot"
             UserDefaults().removePersistentDomain(forName: suite)
-            Leaderboard.store = UserDefaults(suiteName: suite) ?? .standard
+            Store.defaults = UserDefaults(suiteName: suite) ?? .standard
         }
         _ = Sound.shared  // synthesize audio before the first frame
         if snapshotDir != nil { Sound.shared.silenceOutput() }
@@ -48,7 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// Dev aid: starts a run, holds tuck, weaves and jumps, then types a high-score name,
-    /// snapshotting along the way. Run with AVALANCHE_DEBUG_CREATURES=1 to meet every creature early.
+    /// snapshotting along the way, at Turbo speed. Add AVALANCHE_DEBUG_CREATURES=1 to meet every creature early,
+    /// and AVALANCHE_DEBUG_PRIZES=1 for frequent prize boxes in the skier's line.
     private func runSnapshotScript(into dir: URL) {
         func key(_ code: UInt16, _ chars: String = "", down: Bool = true) {
             guard let scene = skView.scene, let event = NSEvent.keyEvent(
@@ -62,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         func shot(_ name: String) { (skView.scene as? GameScene)?.snapshot(to: dir.appendingPathComponent("\(name).png")) }
 
+        at(1.0) { key(5); key(5) }  // G twice: Normal → Fast → Turbo
         at(1.5) { shot("00-title") }
         at(2.0) { key(49); key(49, down: false); key(125) }
         for i in 1...26 {
@@ -94,6 +96,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         (skView.scene as? GameScene)?.focusLost()
     }
 
+    @objc private func setSpeed(_ sender: NSMenuItem) {
+        Settings.speedIndex = sender.tag
+        (skView.scene as? GameScene)?.speedChanged()
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(setSpeed(_:)) { menuItem.state = menuItem.tag == Settings.speedIndex ? .on : .off }
+        return true
+    }
+
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
 
@@ -105,6 +117,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         appMenu.addItem(withTitle: "Quit Avalanche Run", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         menu.addItem(appItem)
+
+        let gameItem = NSMenuItem()
+        let gameMenu = NSMenu(title: "Game")
+        for (i, speed) in Settings.speeds.enumerated() {
+            let item = NSMenuItem(title: "Speed: \(speed.label)", action: #selector(setSpeed(_:)), keyEquivalent: "\(i + 1)")
+            item.tag = i
+            item.target = self
+            gameMenu.addItem(item)
+        }
+        gameItem.submenu = gameMenu
+        menu.addItem(gameItem)
 
         let windowItem = NSMenuItem()
         let windowMenu = NSMenu(title: "Window")
